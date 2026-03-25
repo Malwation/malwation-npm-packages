@@ -1,5 +1,5 @@
 {
-  "name": "malwation-libs",
+  "name": "malwation-npm-packages",
   "private": true,
   "workspaces": [
     "packages/*"

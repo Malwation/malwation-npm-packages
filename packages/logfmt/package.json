@@ -18,7 +18,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:Malwation/malwation-libs.git",
+    "url": "git+https://github.com/Malwation/malwation-npm-packages.git",
     "directory": "packages/logfmt"
   },
   "keywords": [
