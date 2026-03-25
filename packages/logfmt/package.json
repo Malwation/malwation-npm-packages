@@ -2,7 +2,7 @@
   "name": "@malwation/logfmt",
   "description": "Winston logfmt formatter for NestJS applications",
   "author": "Malwation Web Team",
-  "version": "0.0.47",
+  "version": "0.0.48",
   "license": "MIT",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
