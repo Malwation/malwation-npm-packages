@@ -97,9 +97,9 @@
     "openid-client": "^5.3.0"
   },
   "bugs": {
-    "url": "https://github.com/kubernetes-client/javascript/issues"
+    "url": "https://github.com/Malwation/malwation-npm-packages/issues"
   },
-  "homepage": "https://github.com/kubernetes-client/javascript#readme",
+  "homepage": "https://github.com/Malwation/malwation-npm-packages/blob/main/packages/kubernetes-client-node/README.md",
   "keywords": [
     "kubernetes",
     "client"
