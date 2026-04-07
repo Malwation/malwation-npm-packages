@@ -11,7 +11,7 @@ module.exports = {
   env: {
     node: true,
   },
-  ignorePatterns: ["*.js", "**/dist/"],
+  ignorePatterns: ["*.js", "**/dist/", "packages/kubernetes-client-node/**"],
   rules: {
     "@typescript-eslint/interface-name-prefix": "off",
     "@typescript-eslint/explicit-function-return-type": "off",
