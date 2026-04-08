@@ -7,6 +7,7 @@ Monorepo for `@malwation/*` npm packages.
 | Package | Description |
 |---------|-------------|
 | [@malwation/logfmt](https://www.npmjs.com/package/@malwation/logfmt) | Winston logfmt formatter for NestJS |
+| [@malwation/kubernetes-client-node](https://www.npmjs.com/package/@malwation/kubernetes-client-node) | NodeJS client for Kubernetes |
 
 ## Development
 

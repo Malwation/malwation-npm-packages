@@ -11,7 +11,7 @@ module.exports = {
   env: {
     node: true,
   },
-  ignorePatterns: ["*.js", "**/dist/"],
+  ignorePatterns: ["*.js", "**/dist/", "packages/kubernetes-client-node/**"],
   rules: {
     "@typescript-eslint/interface-name-prefix": "off",
     "@typescript-eslint/explicit-function-return-type": "off",
@@ -35,7 +35,7 @@ module.exports = {
     "import/no-extraneous-dependencies": [
       "error",
       {
-        devDependencies: ["**/*.test.ts", "**/*.e2e-spec.ts", "**/*.spec.ts"],
+        devDependencies: ["**/*.test.ts", "**/*.e2e-spec.ts", "**/*.spec.ts", "**/*.d.ts"],
       },
     ],
     "max-classes-per-file": "off",

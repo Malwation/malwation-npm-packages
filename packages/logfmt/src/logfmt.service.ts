@@ -6,10 +6,10 @@ import {
 } from "@nestjs/common";
 import * as crypto from "crypto";
 import { REQUEST } from "@nestjs/core";
+import { ClientOptions } from "syslog-client";
 import parseCookies from "./utilities/cookieparser";
 import { IErrorLogParams, ILogParams } from "./logfmt.utilities";
 import { Logger } from "./logger";
-import { ClientOptions } from "syslog-client";
 
 interface IHeaders {
   cookie?: string;
@@ -79,36 +79,35 @@ export class LogfmtService {
     params?: undefined | ILogParams,
     client?: ClientOptions & { target: string }
   ): void {
-    if (params === undefined) {
-      params = {
-        send_to_syslog: true,
-        syslog_host: client.target,
-        syslog_port: client.port,
-        syslog_appName: client.appName,
-        syslog_syslogHostname: client.syslogHostname,
-        syslog_tcpTimeout: client.tcpTimeout,
-        syslog_transport: client.transport,
-        syslog_facility: client.facility,
-        syslog_severity: client.severity,
-        syslog_rfc3164: client.rfc3164,
-      };
-    } else {
-      params = {
-        ...params,
-        send_to_syslog: true,
-        syslog_host: client.target,
-        syslog_port: client.port,
-        syslog_appName: client.appName,
-        syslog_syslogHostname: client.syslogHostname,
-        syslog_tcpTimeout: client.tcpTimeout,
-        syslog_transport: client.transport,
-        syslog_facility: client.facility,
-        syslog_severity: client.severity,
-        syslog_rfc3164: client.rfc3164,
-      };
-    }
+    const resolvedParams: ILogParams =
+      params !== undefined
+        ? {
+            ...params,
+            send_to_syslog: true,
+            syslog_host: client.target,
+            syslog_port: client.port,
+            syslog_appName: client.appName,
+            syslog_syslogHostname: client.syslogHostname,
+            syslog_tcpTimeout: client.tcpTimeout,
+            syslog_transport: client.transport,
+            syslog_facility: client.facility,
+            syslog_severity: client.severity,
+            syslog_rfc3164: client.rfc3164,
+          }
+        : {
+            send_to_syslog: true,
+            syslog_host: client.target,
+            syslog_port: client.port,
+            syslog_appName: client.appName,
+            syslog_syslogHostname: client.syslogHostname,
+            syslog_tcpTimeout: client.tcpTimeout,
+            syslog_transport: client.transport,
+            syslog_facility: client.facility,
+            syslog_severity: client.severity,
+            syslog_rfc3164: client.rfc3164,
+          };
 
-    const mergedParams = this.mergeParams(params || {});
+    const mergedParams = this.mergeParams(resolvedParams);
     NestLogger.log(message, {
       ...mergedParams,
       context: this.getLogContext(),

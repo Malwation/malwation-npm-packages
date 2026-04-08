@@ -21,12 +21,10 @@
     "format": "prettier --loglevel error --write \"./src/**/*.ts\"",
     "lint": "tslint --project \".\" && prettier --check \"./src/**/*.ts\" && tslint --project \"./examples/typescript\"",
     "clean": "rm -Rf node_modules/ dist/",
-    "build": "tsc",
+    "build": "echo 'dist is pre-built, skipping'",
     "generate": "./generate-client.sh",
     "watch": "tsc --watch",
-    "test": "nyc mocha",
-    "prepare": "npm run build",
-    "prepack": "npm run build",
+    "test": "echo 'no tests for pre-built package, skipping'",
     "docs": "typedoc src/gen/api.ts"
   },
   "nyc": {
@@ -104,6 +102,9 @@
     "kubernetes",
     "client"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "prettier": {
     "tabWidth": 4,
     "printWidth": 110,

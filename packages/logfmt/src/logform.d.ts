@@ -26,6 +26,7 @@ declare module "logform" {
     constructor(opts?: object);
 
     options?: object;
+
     transform: TransformFunction;
   }
 
@@ -33,7 +34,9 @@ declare module "logform" {
     constructor(opts?: object);
 
     createColorize: (opts?: object) => Colorizer;
+
     addColors: (colors: Colors) => Colors;
+
     colorize: (level: string, message: string) => string;
   }
 

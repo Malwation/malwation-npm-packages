@@ -1,7 +1,7 @@
 /* eslint-disable no-param-reassign */
-import { Format, TransformableInfo, format } from "logform";
-import { Colors, LevelColors } from "./logfmt.constants";
+import { Format, format, TransformableInfo } from "logform";
 import { Client } from "syslog-client";
+import { Colors, LevelColors } from "./logfmt.constants";
 
 export type LogfmtFormatWrap = (opts?: ILogfmtTransformOptions) => Format;
 
@@ -89,7 +89,7 @@ export class logfmt {
 
   static parse: LogfmtFormatWrap = format(
     (info: TransformableInfo, opts: ILogfmtTransformOptions) => {
-      const message = info.message;
+      const { message } = info;
       const isError = info.stack !== undefined;
       const hasContext = !isError && info.context !== undefined;
       let hasDetailedContext = false;
@@ -111,13 +111,15 @@ export class logfmt {
               ? `${Colors.FgCyan}${info.context}${Colors.Reset}`
               : info.context;
 
-            info.message += info?.context
-              ? info?.context.toString().includes(" ")
-                ? ` context="${context}" `
-                : ` context=${context} `
-              : "";
+            if (info?.context) {
+              if (info.context.toString().includes(" ")) {
+                info.message += ` context="${context}" `;
+              } else {
+                info.message += ` context=${context} `;
+              }
+            }
             break;
-          case "object":
+          case "object": {
             hasDetailedContext = true;
             context = opts.colorize
               ? `${Colors.FgCyan}${(info.context as any).context}${
@@ -125,12 +127,16 @@ export class logfmt {
                 }`
               : (info.context as any).context;
 
-            info.message += (info?.context as any)?.context
-              ? (info?.context as any)?.context.includes(" ")
-                ? ` context="${context}" `
-                : ` context=${context} `
-              : "";
+            const objContext = (info?.context as any)?.context;
+            if (objContext) {
+              if (objContext.includes(" ")) {
+                info.message += ` context="${context}" `;
+              } else {
+                info.message += ` context=${context} `;
+              }
+            }
             break;
+          }
           default:
             break;
         }
@@ -204,12 +210,12 @@ export class logfmt {
 
         if (opts.colorize) {
           info.message = `${Colors.FgGray}time=${timestamp.replace(
-            /\,\ /,
+            /, /,
             "-"
           )}.${date.getMilliseconds()}${Colors.Reset} ${info.message}`;
         } else {
           info.message = `time=${timestamp.replace(
-            /\,\ /,
+            /, /,
             "-"
           )}.${date.getMilliseconds()} ${info.message}`;
         }
@@ -219,7 +225,7 @@ export class logfmt {
         typeof info.context === "object" &&
         (info.context as Record<string, any>).send_to_syslog === true
       ) {
-        const context: Record<string, any> = info.context;
+        const { context } = info as unknown as { context: Record<string, any> };
         const client = new Client(context.syslog_host, {
           port: context.syslog_port,
           appName: context.syslog_appName,

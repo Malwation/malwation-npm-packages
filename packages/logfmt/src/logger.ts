@@ -7,43 +7,14 @@
 import { Logger as NestLogger } from "@nestjs/common";
 import * as crypto from "crypto";
 import { AsyncLocalStorage } from "async_hooks";
-import { IErrorLogParams, ILogParams } from "./logfmt.utilities";
 import { ClientOptions } from "syslog-client";
+import { IErrorLogParams, ILogParams } from "./logfmt.utilities";
 
 type LogContextType = {
   className: string;
   methodName: string;
   [key: string]: any;
 };
-
-export function CaptureLogContext() {
-  return function (
-    target: any,
-    propertyKey: string,
-    descriptor: PropertyDescriptor
-  ) {
-    const originalMethod = descriptor.value;
-    const className = target.constructor.name;
-
-    descriptor.value = function (...args: any[]) {
-      const existingContext = Logger.getContext() || {};
-
-      return Logger.runWithContext(
-        {
-          ...existingContext,
-          className,
-          methodName: propertyKey,
-        },
-        () => {
-          const returnValue = originalMethod.apply(this, args);
-          return returnValue;
-        }
-      );
-    };
-
-    return descriptor;
-  };
-}
 
 export class Logger {
   private static asyncLocalStorage = new AsyncLocalStorage<LogContextType>();
@@ -83,56 +54,39 @@ export class Logger {
     client?: ClientOptions & { target: string }
   ) {
     const context = this.getContext();
-
-    if (params === undefined) {
-      params = {
-        send_to_syslog: true,
-        syslog_host: client.target,
-        syslog_port: client.port,
-        syslog_appName: client.appName,
-        syslog_syslogHostname: client.syslogHostname,
-        syslog_tcpTimeout: client.tcpTimeout,
-        syslog_transport: client.transport,
-        syslog_facility: client.facility,
-        syslog_severity: client.severity,
-        syslog_rfc3164: client.rfc3164,
-      };
-
-      if (client === undefined) {
-        params = {
-          send_to_syslog: true,
-          syslog_host: client.target,
-          syslog_port: client.port,
-          syslog_appName: client.appName,
-          syslog_syslogHostname: client.syslogHostname,
-          syslog_tcpTimeout: client.tcpTimeout,
-          syslog_transport: client.transport,
-          syslog_facility: client.facility,
-          syslog_severity: client.severity,
-          syslog_rfc3164: client.rfc3164,
-        };
-      }
-    } else {
-      params = {
-        ...params,
-        send_to_syslog: true,
-        syslog_host: client.target,
-        syslog_port: client.port,
-        syslog_appName: client.appName,
-        syslog_syslogHostname: client.syslogHostname,
-        syslog_tcpTimeout: client.tcpTimeout,
-        syslog_transport: client.transport,
-        syslog_facility: client.facility,
-        syslog_severity: client.severity,
-        syslog_rfc3164: client.rfc3164,
-      };
-    }
+    const resolvedParams: ILogParams =
+      params !== undefined
+        ? {
+            ...params,
+            send_to_syslog: true,
+            syslog_host: client.target,
+            syslog_port: client.port,
+            syslog_appName: client.appName,
+            syslog_syslogHostname: client.syslogHostname,
+            syslog_tcpTimeout: client.tcpTimeout,
+            syslog_transport: client.transport,
+            syslog_facility: client.facility,
+            syslog_severity: client.severity,
+            syslog_rfc3164: client.rfc3164,
+          }
+        : {
+            send_to_syslog: true,
+            syslog_host: client.target,
+            syslog_port: client.port,
+            syslog_appName: client.appName,
+            syslog_syslogHostname: client.syslogHostname,
+            syslog_tcpTimeout: client.tcpTimeout,
+            syslog_transport: client.transport,
+            syslog_facility: client.facility,
+            syslog_severity: client.severity,
+            syslog_rfc3164: client.rfc3164,
+          };
 
     const fullContext =
       context?.className && context?.methodName
         ? `${context.className}.${context.methodName}`
         : "UnknownContext";
-    NestLogger.log(message, { ...(params || {}), context: fullContext });
+    NestLogger.log(message, { ...resolvedParams, context: fullContext });
   }
 
   /**
@@ -163,19 +117,18 @@ export class Logger {
       context?.className && context?.methodName
         ? `${context.className}.${context.methodName}`
         : "UnknownContext";
-    let _params: IErrorLogParams;
     const traceId =
       typeof params === "object" && (params.traceId as string)
         ? (params.traceId as string)
         : crypto.randomUUID();
 
-    _params = {
+    const errorParams: IErrorLogParams = {
       traceId,
       ...params,
       context: fullContext,
     };
 
-    NestLogger.error(message, _params);
+    NestLogger.error(message, errorParams);
     return traceId;
   }
 
@@ -237,4 +190,34 @@ export class Logger {
   static attachBuffer() {
     NestLogger.attachBuffer();
   }
+}
+
+export function CaptureLogContext() {
+  return function captureContext(
+    target: any,
+    propertyKey: string,
+    descriptor: PropertyDescriptor
+  ) {
+    const originalMethod = descriptor.value;
+    const className = target.constructor.name;
+
+    // eslint-disable-next-line no-param-reassign
+    descriptor.value = function withContext(...args: any[]) {
+      const existingContext = Logger.getContext() || {};
+
+      return Logger.runWithContext(
+        {
+          ...existingContext,
+          className,
+          methodName: propertyKey,
+        },
+        () => {
+          const returnValue = originalMethod.apply(this, args);
+          return returnValue;
+        }
+      );
+    };
+
+    return descriptor;
+  };
 }
