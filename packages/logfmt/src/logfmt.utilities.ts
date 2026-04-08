@@ -225,7 +225,7 @@ export class logfmt {
         typeof info.context === "object" &&
         (info.context as Record<string, any>).send_to_syslog === true
       ) {
-        const { context }: { context: Record<string, any> } = info;
+        const { context } = info as unknown as { context: Record<string, any> };
         const client = new Client(context.syslog_host, {
           port: context.syslog_port,
           appName: context.syslog_appName,
