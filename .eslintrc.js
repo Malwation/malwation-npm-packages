@@ -35,7 +35,7 @@ module.exports = {
     "import/no-extraneous-dependencies": [
       "error",
       {
-        devDependencies: ["**/*.test.ts", "**/*.e2e-spec.ts", "**/*.spec.ts"],
+        devDependencies: ["**/*.test.ts", "**/*.e2e-spec.ts", "**/*.spec.ts", "**/*.d.ts"],
       },
     ],
     "max-classes-per-file": "off",
