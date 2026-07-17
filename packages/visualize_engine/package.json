@@ -1,15 +1,27 @@
 {
-  "name": "vizengine",
+  "name": "@malwation/vizengine",
   "version": "0.1.0",
   "description": "Zero-dependency browser visualize engine — markdown-superset format with ASCII-theme diagrams",
   "type": "module",
   "main": "src/index.js",
+  "files": [
+    "src/",
+    "dist/",
+    "llms.txt"
+  ],
   "scripts": {
     "build": "node build.mjs",
     "test": "node --test"
   },
-  "license": "UNLICENSED",
-  "private": true,
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Malwation/malwation-npm-packages.git",
+    "directory": "packages/visualize_engine"
+  },
   "devDependencies": {
     "esbuild": "^0.28.1"
   }

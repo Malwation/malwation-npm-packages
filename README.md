@@ -8,7 +8,7 @@ Monorepo for `@malwation/*` npm packages.
 |---------|-------------|
 | [@malwation/logfmt](https://www.npmjs.com/package/@malwation/logfmt) | Winston logfmt formatter for NestJS |
 | [@malwation/kubernetes-client-node](https://www.npmjs.com/package/@malwation/kubernetes-client-node) | NodeJS client for Kubernetes |
-| [vizengine](packages/visualize_engine) | Zero-dependency browser visualize engine — markdown-superset format with ASCII-theme diagrams (private, not published) |
+| [@malwation/vizengine](https://www.npmjs.com/package/@malwation/vizengine) | Zero-dependency browser visualize engine — markdown-superset format with ASCII-theme diagrams |
 
 ## Development
 
