@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VizEngine — graph editor</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; background: #ececec; color: #1a1a1a; }
+  header { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px dashed #999; background: #fff; flex-wrap: wrap; }
+  header b { margin-right: auto; }
+  header a.btn, button, select { font: inherit; background: #fff; border: 1px solid #1a1a1a; padding: 4px 10px; cursor: pointer; box-shadow: 2px 2px 0 rgba(0,0,0,.15); text-decoration: none; color: inherit; border-radius: 3px; }
+  button.on { background: #1a1a1a; color: #fff; }
+  main { flex: 1; display: grid; grid-template-columns: 168px 1.4fr 1fr; min-height: 0; }
+  #palette { border-right: 1px dashed #999; background: #fff; overflow: auto; padding: 8px; }
+  #palette h4 { margin: 10px 4px 4px; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .05em; }
+  .chip { display: flex; align-items: center; gap: 6px; padding: 6px 8px; margin: 4px 0; border: 1px solid #1a1a1a; border-radius: 5px; cursor: grab; background: #fbfbfb; font-size: 12px; user-select: none; }
+  .chip:active { cursor: grabbing; }
+  .chip svg { flex: none; }
+  #canvas { border-right: 1px dashed #999; min-height: 0; position: relative; }
+  #canvas.drop { outline: 3px dashed #1e6fff; outline-offset: -3px; }
+  aside { display: flex; flex-direction: column; min-height: 0; }
+  #preview { flex: 1; overflow: auto; border-bottom: 1px dashed #999; }
+  #dsl { height: 34%; border: none; resize: none; padding: 10px; font: inherit; outline: none; background: #fbfbfb; }
+  .grp { display: inline-flex; gap: 2px; align-items: center; padding: 0 4px; border-left: 1px dashed #ccc; }
+  .grp label { color: #666; }
+  #errors { color: #b00020; }
+  #hint { color: #666; padding: 4px 14px; background: #fff; border-bottom: 1px dashed #ddd; }
+</style>
+</head>
+<body>
+<header>
+  <b>VizEngine graph editor <span id="ver"></span></b>
+  <span id="errors"></span>
+  <div class="grp">
+    <label>tool</label>
+    <button id="t-select" class="on">select</button>
+    <button id="t-add">add</button>
+    <button id="t-connect">connect</button>
+  </div>
+  <div class="grp"><label>shape</label><select id="shape"><option>box</option><option>stadium</option><option>diamond</option><option>container</option></select></div>
+  <div class="grp"><label>icon</label><select id="icon"></select></div>
+  <div class="grp"><label>edge</label><select id="edge"><option value="arrow">arrow</option><option value="both">both</option><option value="line">line</option></select>
+    <select id="variant"><option value="">plain</option><option value="ok">ok</option><option value="warn">warn</option><option value="err">err</option><option value="accent">accent</option></select></div>
+  <div class="grp"><label>dir</label><select id="dir"><option>TD</option><option>LR</option><option>BT</option><option>RL</option></select></div>
+  <div class="grp"><label>theme</label><select id="theme"></select></div>
+  <button id="clear">clear</button>
+  <button id="copy">copy DSL</button>
+  <a class="btn" href="./composer.html" style="background:#1a1a1a;color:#fff">all components (composer) →</a>
+  <a class="btn" href="./examples.html">examples →</a>
+</header>
+<div id="hint">Tool <b>add</b>: click canvas to place a node · <b>connect</b>: drag node→node · <b>select</b>: drag to move, double-click to rename, Delete to remove.</div>
+<main>
+  <div id="palette"></div>
+  <div id="canvas"></div>
+  <aside>
+    <div id="preview"><div id="panel"></div></div>
+    <textarea id="dsl" spellcheck="false"></textarea>
+  </aside>
+</main>
+<script src="../dist/vizengine.js"></script>
+<script>
+  window.onerror = (m) => { document.getElementById('errors').textContent = 'ERROR: ' + m; };
+  const $ = (id) => document.getElementById(id);
+  $('ver').textContent = 'v' + VizEngine.version;
+
+  // populate theme + icon selects
+  for (const t of VizEngine.themes) { const o = document.createElement('option'); o.value = o.textContent = t; $('theme').appendChild(o); }
+  const iconSel = $('icon');
+  iconSel.appendChild(new Option('(none)', ''));
+  for (const name of VizEngine.Editor.icons) iconSel.appendChild(new Option(name, name));
+
+  const fence = (src) => '```graph\n' + src + '\n```';
+  const stripFence = (t) => t.replace(/^```[^\n]*\n?/, '').replace(/\n?```\s*$/, '');
+
+  let panel = new VizEngine.Panel($('panel'), { theme: 'sketch' });
+  const editor = new VizEngine.Editor($('canvas'), {
+    onChange: (src) => { $('dsl').value = fence(src); panel.render(fence(src)); },
+  });
+
+  // seed with a small graph
+  editor.load('graph TD\na: [ @gear loader ]\nb: [ @skull payload ]\nc: ( @globe C2 )\na -> b : "unpack"\nb -> c : "beacon" [err]');
+  $('dsl').value = fence(editor.toSource());
+  panel.render(fence(editor.toSource()));
+
+  // tools
+  const tools = ['select', 'add', 'connect'];
+  for (const t of tools) $('t-' + t).onclick = () => {
+    editor.setTool(t);
+    tools.forEach((x) => $('t-' + x).classList.toggle('on', x === t));
+  };
+  // palette
+  $('shape').onchange = () => (editor.palette.shape = $('shape').value);
+  $('icon').onchange = () => (editor.palette.icon = $('icon').value || null);
+  $('edge').onchange = () => (editor.palette.edgeKind = $('edge').value);
+  $('variant').onchange = () => (editor.palette.variant = $('variant').value || null);
+  $('dir').onchange = () => editor.setDirection($('dir').value);
+  $('theme').onchange = () => { panel.setTheme($('theme').value); panel.render(editor.toSource()); };
+  $('clear').onclick = () => editor.clear();
+  $('copy').onclick = () => { navigator.clipboard?.writeText(editor.toSource()); $('copy').textContent = 'copied'; setTimeout(() => ($('copy').textContent = 'copy DSL'), 1000); };
+
+  // --- draggable component palette ---
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  function chipIcon(shape, icon) {
+    const svg = document.createElementNS(SVGNS, 'svg');
+    svg.setAttribute('width', '30'); svg.setAttribute('height', '20'); svg.setAttribute('viewBox', '0 0 30 20');
+    const s = document.createElementNS(SVGNS, shape === 'diamond' ? 'polygon' : 'rect');
+    if (shape === 'diamond') s.setAttribute('points', '15,2 28,10 15,18 2,10');
+    else { s.setAttribute('x', '2'); s.setAttribute('y', '3'); s.setAttribute('width', '26'); s.setAttribute('height', '14'); s.setAttribute('rx', shape === 'stadium' ? '7' : '2'); }
+    s.setAttribute('fill', '#fff'); s.setAttribute('stroke', '#1a1a1a'); s.setAttribute('stroke-width', '1.4');
+    if (shape === 'container') s.setAttribute('stroke-dasharray', '3 2');
+    svg.appendChild(s);
+    return svg;
+  }
+  function addChip(host, def) {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.draggable = true;
+    chip.appendChild(chipIcon(def.shape, def.icon));
+    const span = document.createElement('span'); span.textContent = def.name; chip.appendChild(span);
+    chip.addEventListener('dragstart', (e) => e.dataTransfer.setData('application/json', JSON.stringify(def)));
+    host.appendChild(chip);
+  }
+  const palette = $('palette');
+  const mk = (t) => { const h = document.createElement('h4'); h.textContent = t; palette.appendChild(h); };
+  // callout: this page builds graphs only; all 66 components live in the composer
+  const callout = document.createElement('a');
+  callout.href = './composer.html';
+  callout.textContent = 'Looking for maps, charts, widgets? → open the composer (all 66 components)';
+  callout.style.cssText = 'display:block;margin:4px 2px 8px;padding:8px;border:1px solid #1a1a1a;border-radius:4px;background:#fffbe6;color:#1a1a1a;text-decoration:none;font-size:11px;line-height:1.4';
+  palette.appendChild(callout);
+  mk('Shapes');
+  [['box','box'],['stadium','stadium'],['diamond','diamond'],['container','container']].forEach(([n,s]) => addChip(palette, { name: n, shape: s, icon: null }));
+  mk('Node presets');
+  [
+    { name: 'host', shape: 'box', icon: 'server', label: 'host' },
+    { name: 'process', shape: 'box', icon: 'gear', label: 'process.exe' },
+    { name: 'malware', shape: 'box', icon: 'skull', label: 'malware.exe' },
+    { name: 'user', shape: 'box', icon: 'user', label: 'user' },
+    { name: 'C2', shape: 'stadium', icon: 'globe', label: 'C2' },
+    { name: 'database', shape: 'box', icon: 'database', label: 'db' },
+    { name: 'firewall', shape: 'box', icon: 'shield', label: 'firewall' },
+    { name: 'secret', shape: 'box', icon: 'lock', label: 'secret' },
+    { name: 'decision', shape: 'diamond', icon: null, label: 'decision?' },
+  ].forEach((def) => addChip(palette, def));
+
+  const canvas = $('canvas');
+  canvas.addEventListener('dragover', (e) => { e.preventDefault(); canvas.classList.add('drop'); });
+  canvas.addEventListener('dragleave', () => canvas.classList.remove('drop'));
+  canvas.addEventListener('drop', (e) => {
+    e.preventDefault();
+    canvas.classList.remove('drop');
+    let def; try { def = JSON.parse(e.dataTransfer.getData('application/json')); } catch { return; }
+    const p = editor.pointFromClient(e.clientX, e.clientY);
+    editor.addNode(p.x, p.y, def);
+  });
+
+  // edit DSL text → load into editor
+  let typing;
+  $('dsl').addEventListener('input', () => {
+    clearTimeout(typing);
+    typing = setTimeout(() => { try { editor.load(stripFence($('dsl').value)); panel.render(fence(editor.toSource())); } catch (e) {} }, 400);
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,608 @@
+# VizEngine — LLM Authoring Reference
+
+> VizEngine is a zero-dependency browser engine that turns a **markdown-superset
+> text format** into themed, interactive visuals: prose, tables, images, 16
+> diagram kinds, ~45 UI components, 20 visual themes, animations, and real 3D.
+> This file tells an LLM exactly how to write source for it. Everything below is
+> the *authoring language* — plain text you put into `panel.render(sourceText)`.
+
+Repo: https://github.com/Malwation/visualize_engine · Package: `vizengine`
+
+## How output is consumed
+
+```html
+<script src="dist/vizengine.js"></script>
+<div id="out"></div>
+<script>
+  const panel = new VizEngine.Panel(document.getElementById('out'), { theme: 'sketch' });
+  panel.render(SOURCE_STRING);   // SOURCE_STRING is what you author
+</script>
+```
+
+So: **produce a single markdown-superset string.** It may freely mix prose,
+diagram fences (```` ```kind ````), directive blocks (`:::name`), and inline
+widgets (`[[...]]`).
+
+## Global authoring rules (read first)
+
+1. **Fences start at column 0.** A code/diagram fence (```` ``` ````) and its
+   info string must not be indented.
+2. **Directives are block-level.** `:::name` must be the first thing on a line.
+   Inline use like `Tags: :::chips …` will NOT work — put the directive on its
+   own line, or use the single-line form `:::chips a, b, c :::`.
+3. **Parsers are tolerant** — invalid lines are skipped, partial/streaming input
+   renders whatever is valid so far, nothing throws.
+4. **Comments:** inside diagram fences, a line starting with `#` is a comment.
+5. **Everything is escaped safely** (text via `textContent`); URLs are limited to
+   `http(s):`, relative, and `data:image/*`.
+6. **Diagram layout is on a monospace character grid** but labels render in the
+   theme's font (may be proportional). Keep labels concise.
+
+---
+
+# 1. Diagram fences
+
+Syntax: ```` ```<kind> [flags] ```` then lines, then ```` ``` ````.
+Kinds: `graph tree sequence timeline bars pie gantt graph3d bars3d sankey
+treemap flame geomap network mermaid dot`.
+
+## graph — flowchart / directed graph
+
+Node declaration `id: <shape>`; shape comes from the bracket type:
+
+| syntax | shape |
+|---|---|
+| `id: [ label ]` | box |
+| `id: ( label )` | stadium (rounded ends) |
+| `id: { label }` | diamond (decision) |
+| `id: [[ label ]]` | container (holds children) |
+
+- **Nesting:** dot-path ids put a node inside a container: `sandbox: [[ Sandbox ]]`
+  then `sandbox.proc: [ malware.exe ]`. Missing ancestors auto-become containers.
+- **Icons:** prefix the label with `@name` (see §3): `srv: [ @server host-01 ]`.
+- **Tooltip:** trailing quoted string: `mal: [ malware.exe ] "packed with UPX"`.
+- **Auto-nodes:** an id used only in an edge is auto-created as a box.
+
+Edges:
+
+| syntax | meaning |
+|---|---|
+| `a -> b` | arrow |
+| `a <-> b` | bidirectional (arrowheads both ends) |
+| `a -- b` | plain line, no arrow |
+| `a -> b : "label"` | labeled (quotes optional) |
+| `a -> b : "x" [err]` | colored edge; variant ∈ `ok` `warn` `err` `accent` |
+
+Fence flags (space-separated after `graph`): direction `TD` (default) `LR` `BT`
+`RL`; `iso` (2.5D); `interactive` (drag/hover/collapse); `3d`/`three` (real 3D);
+animation `anim`/`flow`/`draw`/`pulse`/`beacon`/`trace`.
+
+```graph TD
+sandbox: [[ Sandbox ]]
+sandbox.exp: [ @gear explorer.exe ]
+sandbox.mal: [ @skull malware.exe ] "dropped to %TEMP%"
+check: { Malicious? }
+c2: ( @globe C2 )
+sandbox.exp -> sandbox.mal : "spawns"
+sandbox.mal -> check : "score"
+check -> c2 : "yes" [err]
+```
+
+## tree — hierarchy (process/registry tree)
+
+Indentation-based (2 spaces per level). Optional trailing `[box|stadium|diamond]`
+overrides shape; `@icon` prefix works.
+
+```tree
+services.exe
+  svchost.exe
+    conhost.exe
+  explorer.exe
+    malware.exe [diamond]
+      cmd.exe
+```
+
+## sequence — actors & messages
+
+Optional actor label decl `id: [ Label ]` (with `@icon`). Messages `a -> b : "msg"`.
+Self-message `a -> a : "loop"`.
+
+```sequence
+c: [ @user implant ]
+s: [ @server c2 ]
+c -> s : "beacon"
+s -> c : "task: screenshot"
+c -> c : "capture"
+```
+
+## timeline — stamped events
+
+Each line: `<stamp> <rest of line>` (stamp = first whitespace token).
+
+```timeline
+00:00 detonation
+00:04 drops payload
+00:41 dns query evil-c2.example
+```
+
+## bars — horizontal bar chart
+
+`label: value` (default max 100) or `label: value / max`.
+
+```bars
+behavior: 92
+stealth: 45 / 200
+```
+
+## pie — donut chart
+
+`label: value` (percentages + legend auto-computed).
+
+```pie
+trojan: 46
+stealer: 27
+clean: 12
+```
+
+## gantt — schedule
+
+`label: start duration` (abstract numeric units).
+
+```gantt
+unpack: 0 2
+beacon: 5 9
+exfil: 9 3
+```
+
+## graph3d — real rotating 3D graph
+
+Same node/edge syntax as `graph`; nodes get true 3D coordinates and the scene
+rotates (~7s/rev, hover to pause). `graph ... 3d` is equivalent.
+
+```graph3d
+root: [ services.exe ]
+a: [ svchost.exe ]
+b: [ malware.exe ]
+root -> a
+a -> b
+```
+
+## bars3d — extruded 3D bars
+
+Same as `bars`.
+
+```bars3d
+behavior: 92
+network: 71
+```
+
+## sankey — weighted flow diagram
+
+`src -> dst : weight` (weight default 1); ribbon width ∝ flow.
+
+```sankey
+phish -> macro : 40
+macro -> loader : 30
+loader -> exfil : 25
+```
+
+## treemap — squarified sized rectangles
+
+Indented `name: value`; a parent's value defaults to the sum of its children.
+
+```treemap
+dropper.exe
+  .text: 90
+  .rsrc: 120
+    icon: 30
+    strings: 90
+```
+
+## flame — flame/icicle graph (call stacks)
+
+Indented `frame: value`; stacks by depth, width ∝ value.
+
+```flame
+main: 100
+  unpack: 45
+  execute: 55
+    inject: 35
+```
+
+## geomap — geographic threat map
+
+Nodes: `id @ City | label` (built-in city table, ~42 cities) or
+`id: lat,lon | label`. Labels may start with an `@icon` (drawn at the pin).
+Edges become arcs with arrowheads: `from -> to | label [variant] [style]` where
+variant ∈ `ok warn err accent` and style ∈ `dashed dotted solid`.
+
+```geomap
+victim @ New York | @user victim host
+relay @ Amsterdam | @server relay
+c2 @ Moscow | @skull C2 primary
+victim -> relay | c2 login [warn] dashed
+relay -> c2 | beacon [err]
+```
+
+Known cities include: amsterdam, moscow, beijing, tokyo, london, new york,
+los angeles, berlin, paris, sao paulo, sydney, mumbai, singapore, dubai, lagos,
+johannesburg, toronto, chicago, seoul, istanbul, kyiv, tehran, cairo, bucharest,
+hong kong, delhi, bangkok, jakarta, madrid, rome, san francisco, washington,
+frankfurt, stockholm, oslo, reykjavik, nairobi. Unknown cities are skipped; use
+explicit `lat,lon` otherwise.
+
+## network — force-directed topology
+
+Same syntax as `graph`. Nodes are placed by a deterministic force simulation
+(organic layout) with straight edges.
+
+```network
+gw: [ @server gateway ]
+h1: [ host-1 ]
+h2: [ host-2 ]
+gw -> h1
+gw -> h2
+h1 -> h2
+h2 -> gw [err]
+```
+
+## mermaid — import a Mermaid flowchart
+
+Paste Mermaid `flowchart`/`graph` syntax; it renders in the active theme.
+Supports `A[box] A(round) A{diamond} A((circle))`, edges `-->` `---` `-.->`,
+`-->|label|`, chains, `flowchart TD|LR`.
+
+```mermaid
+flowchart TD
+  A[explorer.exe] --> B{Suspicious?}
+  B -->|yes| C(malware.exe)
+```
+
+## dot — import a Graphviz DOT graph
+
+Paste `digraph`/`graph { ... }`; supports `a -> b [label="x"]`,
+`n [label="y" shape=diamond]`, `rankdir=LR`.
+
+```dot
+digraph { rankdir=LR; a -> b [label="open"]; b -> c; }
+```
+
+---
+
+# 2. Graph capabilities (flags & features)
+
+- **Icons** — `@name` in any node/actor/tree label. See §3.
+- **Connections** — `->` `<->` `--`, plus variant `[ok|warn|err|accent]`.
+- **Directions** — `graph TD|LR|BT|RL`.
+- **Isometric** — add `iso`: `graph TD iso`. Projects to 2.5D slabs.
+- **Interactive** — add `interactive`: drag nodes, hover to focus neighbors,
+  click a container's `▾` toggle to collapse. (Or pass `interactive:true` to the
+  Panel to apply to all graphs.)
+- **Real 3D** — `graph3d` or `graph … 3d`.
+- **Animation** — `anim` (flow+draw), or one of `flow` (marching edges),
+  `draw` (staggered reveal), `pulse` (breathing), `beacon` (ping rings),
+  `trace` (sequential edge highlight). Respects `prefers-reduced-motion`.
+
+Example combining flags: ```` ```graph LR iso flow ````.
+
+---
+
+# 3. Node icons (16)
+
+Use as `@name` at the START of a node label. Unknown names are ignored (label
+still renders). Available:
+
+`server database file gear globe user shield bug folder lock alert terminal
+chip cloud mail skull`
+
+Example: `n: [ @skull dropper.exe ]`, `db: ( @database evidence )`.
+
+---
+
+# 4. Directive components — `:::name … :::`
+
+General form:
+```
+:::name optional-args
+inner line 1
+inner line 2
+:::
+```
+Single-line form: `:::name inline args :::`. Some use `== Label` inner sections.
+Full list of names: `tabs accordion steps columns grid card divider meta stat
+score gauge ring rating status heatmap legend chips dtimeline swatches banner
+note quote ioc verdict mitre hexdump yara compare alert terminal kbd spinner
+loader pulsedot typewriter beacon radar countdown matrix`.
+
+## Layout
+
+**tabs** — inner `== Label` panels; click to switch. Panels contain markdown.
+```
+:::tabs
+== Summary
+Sample is a **stealer**.
+== IOCs
+- 45.13.7.2:443
+:::
+```
+
+**accordion** — inner `== Label` items, each collapsible.
+
+**columns** — inner `== Label` sections become columns.
+
+**grid** — inner `== Label` sections become a responsive card grid.
+
+**card** — `:::card <title>` then body markdown → one titled card.
+
+**divider** — `:::divider <label> :::` → a labeled horizontal rule.
+
+**meta** — `term :: value` lines → a key/value card.
+```
+:::meta
+SHA-256 :: 9f86d0…
+C2 :: 45.13.7.2:443
+:::
+```
+
+## Data / metrics
+
+**stat** — KPI tiles, one per line `value | label | delta` (delta `+`/`-`
+colors up/down; counts up on render).
+```
+:::stat
+92 / 100 | Behavior | +14
+3 | Processes |
+:::
+```
+
+**score** — `value [/ max] [grade] [label]` → big number + grade.
+`:::score` / `92 A threat` / `:::`
+
+**gauge** — `value [/ max] [label]` → half-circle gauge (sweeps to value).
+
+**ring** — `value [/ max] [label]` → full circular progress ring.
+
+**rating** — `n / m [label]` → star rating.
+
+**status** — one per line `<state> <label>`; state ∈ `ok warn err info up down
+idle` → colored dot + label.
+
+**heatmap** — rows of space/comma-separated numbers → colored cell grid.
+
+**legend** — one per line `<color> <label>`; color ∈ `ok warn err accent muted
+ink` or a `#hex`.
+
+**chips** — comma list; prefix `!`→danger, `+`→ok, `~`→warn, none→neutral.
+`:::chips !critical, +verified, ~evasion, stealer :::`
+
+**dtimeline** — one per line `stamp | text` → vertical event timeline.
+
+**swatches** — comma list `#hex name` → color palette chips.
+
+## Presentation
+
+**banner** — `:::banner Title | subtitle :::` → hero banner.
+
+**note** — `:::note <pin>` + body → sticky note.
+
+**quote** — `text — author` → pull quote with citation.
+
+## Malware-analysis
+
+**ioc** — one per line `<type> <value> [| note]` → indicator rows with copy
+buttons. Type is free text (e.g. `sha256`, `ip`, `domain`, `mutex`).
+```
+:::ioc
+sha256  9f86d081884c7d659a2feaa0c55ad015 | dropper
+ip  45.13.7.2:443 | c2
+:::
+```
+
+**verdict** — `<level> <rest>`; level ∈ `malicious suspicious clean benign
+unknown` → colored verdict banner. `:::verdict` / `malicious score 92/100` / `:::`
+
+**mitre** — comma/newline list `Txxxx[.yyy] Name` → ATT&CK technique chips.
+`:::mitre T1055 Process Injection, T1071 C2 :::`
+
+**hexdump** — inner text is encoded to a `offset | hex | ascii` dump.
+
+**yara** — inner YARA rule with keyword highlighting.
+
+**compare** — two inner `== Label` sections → before/after side-by-side.
+
+**alert** — `:::alert <kind> <message> :::`; kind ∈ `note tip warn danger
+success` → full-width banner.
+
+## Widgets (general + animated)
+
+**terminal** — `:::terminal <title>` + lines; lines starting `$ ` or `# ` are
+prompts. Fake terminal window.
+
+**kbd** — keys separated by `+` or spaces → keycaps.
+`Press :::kbd Ctrl + Shift + P :::` — note: for inline sentences, keep it a
+single-line directive on its own line, or the surrounding text won't render it.
+
+Animated (motion is CSS/SMIL, respects reduced-motion): **spinner** (label),
+**loader** (label), **pulsedot** (label), **typewriter** (text), **beacon**
+(label), **radar** (no args), **countdown** (`:::countdown 7s` + label line),
+**matrix** (no args).
+
+---
+
+# 5. Inline widgets (inside prose)
+
+Standard markdown inline works: `**bold**`, `*italic*`, `` `code` ``,
+`[link](url)`, `![alt](img-or-gif)`.
+
+Plus VizEngine `[[…]]` widgets (use anywhere in a paragraph):
+
+| syntax | renders |
+|---|---|
+| `[[text]]` | neutral badge chip |
+| `[[!text]]` | danger badge |
+| `[[+text]]` | ok/success badge |
+| `[[~text]]` | warning badge |
+| `[[progress 72]]` | progress bar (0–100) |
+| `[[progress 3/5]]` | progress bar (n of m) |
+| `[[sev 4/5]]` | severity dots (ramps ok→warn→err) |
+| `[[spark 3,7,2,9,5]]` | inline sparkline mini-chart |
+| `[[metric 1.2M requests]]` | big number + label |
+| `[[avatar Kagan Isildak]]` | initials avatar + name |
+
+Example: `Family [[!redline]], analysis [[progress 72]], threat [[sev 4/5]],
+trend [[spark 3,7,4,9,6]].`
+
+---
+
+# 6. Rich document blocks
+
+**Callouts** — a blockquote whose first line is `[!kind] Title`; kind ∈
+`note tip warn warning danger success`.
+```
+> [!danger] Verdict: malicious
+> Behavior score 92/100.
+```
+
+**Definition list (block)** — consecutive `term :: value` lines (not inside a
+table).
+```
+SHA-256 :: 9f86d0…
+C2 :: 45.13.7.2:443
+```
+
+**Collapsible** — `+++ Summary` … `+++`.
+```
++++ Raw strings
+GetProcAddress
+VirtualAlloc
++++
+```
+
+**HTML previewer** — a *closed* ```` ```html ```` fence renders as
+preview/code tabs backed by a sandboxed iframe (`sandbox="allow-scripts"`).
+
+**filetree** — ```` ```filetree ```` fence, indented text → collapsible file/
+registry tree.
+
+**diff** — ```` ```diff ```` fence; lines starting `+`/`-`/space → added/removed/
+context coloring.
+
+**Task lists** — `- [x] done` / `- [ ] todo`.
+
+**Tables** — GFM pipe tables with `:--` / `--:` alignment.
+
+**Other markdown** — headings `#`–`####`, ordered/unordered lists (nested),
+blockquotes, `---` horizontal rule, fenced code with language badge + copy button.
+
+---
+
+# 7. Themes (20)
+
+Each theme is a distinct design language — different fonts, canvas textures,
+**node shapes**, strokes, glow, shadows. Set via the Panel option `theme` or
+`panel.setTheme(name)`. Names:
+
+`sketch` (default) · `sketch-dark` · `blueprint` · `neon` · `notebook` · `glass`
+· `terminal` · `carbon` · `8bit` · `ink` · `crt-amber` · `synthwave` ·
+`midnight` · `solarized` · `dracula` · `nord` · `mono-print` · `hologram` ·
+`kraft` · `wireframe`
+
+Themes do not change the *source* you write — only how it looks. Author once,
+render in any theme.
+
+---
+
+# 8. JavaScript API
+
+```js
+const panel = new VizEngine.Panel(el, {
+  theme: 'sketch',          // any of VizEngine.themes
+  interactive: false,       // enable drag/focus/collapse on all graphs
+  onNodeClick: (node) => {}, // node = {id, label, shape, title}
+  onNodeHover: (nodeOrNull) => {},
+});
+panel.render(source);        // full render (idempotent)
+panel.stream(chunk);         // append + tolerant re-render (for streamed LLM output)
+panel.setTheme('neon');      // live theme switch
+panel.exportSVG(0);          // nth diagram → self-contained SVG string
+panel.exportPNG(0);          // nth diagram → Promise<Blob>
+panel.toAscii(0);            // nth graph/tree → copy-pasteable ASCII (null for 3d/iso)
+panel.clear();
+panel.destroy();
+
+// module-level
+VizEngine.render(el, source, opts); // one-shot → Panel
+VizEngine.fromMermaid(text);        // Mermaid → graph model
+VizEngine.fromDot(text);            // DOT → graph model
+VizEngine.renderAscii(layout);      // layout → ASCII string
+VizEngine.themes;                   // string[] of 20 theme names
+VizEngine.version;
+```
+
+**Web component** — zero JS needed on the page:
+```html
+<viz-engine theme="neon" interactive>
+```graph LR
+a: [ loader ]
+b: [ payload ]
+a -> b : "unpack"
+```
+</viz-engine>
+```
+It auto-registers when `dist/vizengine.js` loads, dedents its content, and
+re-renders when the `theme` attribute changes. Set `.source = "…"` in JS to
+update programmatically.
+
+**Streaming** — for live/LLM output, call `panel.stream(chunk)` repeatedly; the
+parser tolerates unterminated fences and renders completed parts as they arrive.
+
+---
+
+# 9. Quick authoring recipes
+
+**A malware sandbox report** (mix everything):
+```
+# Dynamic Analysis — sample.exe
+
+:::verdict
+malicious score 92/100 · family RedLine
+:::
+
+:::stat
+92 / 100 | Behavior | +14
+3 | Processes |
+1 | C2 endpoint | -2
+:::
+
+## Execution flow
+
+```graph TD
+s: [[ Sandbox ]]
+s.exp: [ @gear explorer.exe ]
+s.mal: [ @skull malware.exe ]
+c2: ( @globe C2 )
+s.exp -> s.mal : "spawns"
+s.mal -> c2 : "beacon" [err]
+```
+
+## Indicators
+
+:::ioc
+sha256  9f86d081884c7d659a2feaa0c55ad015 | dropper
+ip  45.13.7.2:443 | c2
+:::
+
+:::mitre
+T1055 Process Injection, T1071 C2, T1547.001 Registry Run Keys
+:::
+
+> [!warn] Note
+> Sleeps ~40s before beaconing.
+```
+
+**Do / Don't**
+- DO put each diagram fence and directive on its own lines, unindented.
+- DO keep node labels short; use `@icons` for meaning.
+- DON'T indent fences or embed `:::name` mid-sentence (use single-line form).
+- DON'T rely on a specific theme in the source — themes are chosen at render.
+- 3D and isometric diagrams can't be ASCII-exported (`toAscii` returns null).

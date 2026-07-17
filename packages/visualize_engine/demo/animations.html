@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VizEngine — animations & 3D</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; background: #ececec; color: #1a1a1a; }
+  header { position: sticky; top: 0; z-index: 20; display: flex; gap: 10px; align-items: center; padding: 12px 18px; border-bottom: 1px dashed #999; background: #fff; flex-wrap: wrap; }
+  header b { font-size: 15px; }
+  header .sub { color: #6b6b6b; margin-right: auto; }
+  select, a.btn { font: inherit; background: #fff; border: 1px solid #1a1a1a; color: inherit; padding: 5px 12px; cursor: pointer; text-decoration: none; box-shadow: 2px 2px 0 rgba(0,0,0,.15); }
+  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 18px; padding: 18px; max-width: 1900px; margin: 0 auto; }
+  .card { border: 1px solid #1a1a1a; background: #fff; box-shadow: 4px 4px 0 rgba(0,0,0,.12); display: flex; flex-direction: column; }
+  .card > h2 { margin: 0; padding: 10px 14px; font-size: 14px; border-bottom: 1px dashed #999; display: flex; align-items: center; justify-content: space-between; }
+  .card > h2 button { font: inherit; font-size: 12px; border: 1px solid #1a1a1a; background: #fff; cursor: pointer; padding: 2px 9px; border-radius: 4px; }
+  .card > h2 button:hover { background: #1a1a1a; color: #fff; }
+  .card > .note { padding: 6px 14px; color: #6b6b6b; border-bottom: 1px dashed #ddd; }
+  .card .panel { flex: 1; overflow: auto; max-height: 520px; }
+  details { border-top: 1px dashed #999; }
+  details summary { cursor: pointer; padding: 6px 14px; color: #6b6b6b; user-select: none; }
+  details pre { margin: 0; padding: 10px 14px; background: #f7f7f7; overflow-x: auto; border-top: 1px dashed #ddd; font-size: 12px; line-height: 1.5; }
+  #errors { color: #b00020; }
+</style>
+</head>
+<body>
+<header>
+  <b>VizEngine — animations &amp; 3D</b>
+  <span class="sub" id="count"></span>
+  <span id="errors"></span>
+  <label>theme <select id="theme"></select></label>
+  <a class="btn" href="./examples.html">components →</a>
+  <a class="btn" href="./editor.html">editor →</a>
+  <a class="btn" href="./index.html">playground →</a>
+</header>
+<main id="grid"></main>
+<script src="../dist/vizengine.js"></script>
+<script src="./animations-data.js"></script>
+<script>
+  window.onerror = (msg) => { document.getElementById('errors').textContent = 'ERROR: ' + msg; };
+  const params = new URLSearchParams(location.search);
+  const initial = VizEngine.themes.includes(params.get('theme')) ? params.get('theme') : 'synthwave';
+  const sel = document.getElementById('theme');
+  for (const t of VizEngine.themes) { const o = document.createElement('option'); o.value = o.textContent = t; if (t === initial) o.selected = true; sel.appendChild(o); }
+
+  const grid = document.getElementById('grid');
+  const panels = [];
+  for (const ex of window.VIZ_ANIMS) {
+    const card = document.createElement('div'); card.className = 'card';
+    const h = document.createElement('h2');
+    const title = document.createElement('span'); title.textContent = ex.title;
+    const replay = document.createElement('button'); replay.textContent = '↻ replay'; replay.title = 'replay animation';
+    h.append(title, replay);
+    const note = document.createElement('div'); note.className = 'note'; note.textContent = ex.note;
+    const holder = document.createElement('div'); holder.className = 'panel';
+    const details = document.createElement('details');
+    const summary = document.createElement('summary'); summary.textContent = 'view source';
+    const pre = document.createElement('pre'); pre.textContent = ex.source;
+    details.append(summary, pre);
+    card.append(h, note, holder, details);
+    grid.appendChild(card);
+    const panel = new VizEngine.Panel(holder, { theme: initial });
+    panel.render(ex.source);
+    panels.push(panel);
+    replay.onclick = () => panel.render(ex.source);
+  }
+  document.getElementById('count').textContent = `${panels.length} animated examples — motion is live (↻ replay per card)`;
+  sel.onchange = () => panels.forEach((p, i) => { p.setTheme(sel.value); p.render(window.VIZ_ANIMS[i].source); });
+</script>
+</body>
+</html>

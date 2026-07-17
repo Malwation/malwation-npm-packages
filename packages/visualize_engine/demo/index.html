@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VizEngine demo</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px;
+    background: #f4f4f4; color: #1a1a1a;
+  }
+  header {
+    display: flex; gap: 8px; align-items: center; padding: 10px 14px;
+    border-bottom: 1px dashed #999; background: #fff; flex-wrap: wrap;
+  }
+  header b { margin-right: auto; }
+  button, select {
+    font: inherit; background: #fff; border: 1px solid #1a1a1a;
+    padding: 4px 12px; cursor: pointer; box-shadow: 2px 2px 0 rgba(0,0,0,.15);
+  }
+  button:active { transform: translate(1px, 1px); box-shadow: none; }
+  main { flex: 1; display: flex; min-height: 0; }
+  #src {
+    width: 38%; min-width: 280px; resize: none; border: none;
+    border-right: 1px dashed #999; padding: 14px; font: inherit;
+    outline: none; background: #fbfbfb;
+  }
+  #out { flex: 1; overflow: auto; }
+  #panel { min-height: 100%; }
+  #log { color: #6b6b6b; font-size: 12px; padding: 0 14px; min-width: 100%; }
+  #errors { color: #b00020; }
+</style>
+</head>
+<body>
+<header>
+  <b>VizEngine <span id="ver"></span></b>
+  <span id="errors"></span>
+  <select id="theme"></select>
+  <a href="./examples.html" style="text-decoration:none"><button type="button">examples →</button></a>
+  <a href="./animations.html" style="text-decoration:none"><button type="button">animations →</button></a>
+  <a href="./composer.html" style="text-decoration:none"><button type="button">composer (all components) →</button></a>
+  <a href="./editor.html" style="text-decoration:none"><button type="button">graph editor →</button></a>
+  <button id="render">Render</button>
+  <button id="stream">Simulate stream</button>
+  <button id="exportsvg">Export SVG</button>
+  <button id="exportpng">Export PNG</button>
+  <button id="copyascii">⧉ ASCII</button>
+</header>
+<div id="log">click a node…</div>
+<main>
+  <textarea id="src" spellcheck="false"></textarea>
+  <div id="out"><div id="panel"></div></div>
+</main>
+<script src="../dist/vizengine.js"></script>
+<script src="./sample.js"></script>
+<script>
+  window.onerror = (msg) => { document.getElementById('errors').textContent = 'ERROR: ' + msg; };
+
+  const $ = (id) => document.getElementById(id);
+  for (const t of VizEngine.themes) {
+    const o = document.createElement('option');
+    o.value = o.textContent = t;
+    $('theme').appendChild(o);
+  }
+  const src = $('src');
+  src.value = window.VIZ_SAMPLE;
+  $('ver').textContent = 'v' + VizEngine.version;
+
+  let panel = null;
+  let streamTimer = 0;
+
+  function makePanel() {
+    if (panel) panel.destroy();
+    if (streamTimer) { clearInterval(streamTimer); streamTimer = 0; }
+    panel = new VizEngine.Panel($('panel'), {
+      theme: $('theme').value,
+      onNodeClick: (n) => { $('log').textContent = `clicked → id=${n.id} label="${n.label}" shape=${n.shape}`; },
+      onNodeHover: (n) => { if (n) $('log').textContent = `hover → ${n.id}`; },
+    });
+    return panel;
+  }
+
+  function renderAll() { makePanel().render(src.value); }
+
+  $('render').onclick = renderAll;
+  $('theme').onchange = () => { if (panel) { panel.setTheme($('theme').value); panel.render(src.value); } else renderAll(); };
+  src.addEventListener('input', () => panel && panel.render(src.value));
+
+  $('stream').onclick = () => {
+    const p = makePanel();
+    const text = src.value;
+    let i = 0;
+    streamTimer = setInterval(() => {
+      p.stream(text.slice(i, i + 24));
+      i += 24;
+      if (i >= text.length) { clearInterval(streamTimer); streamTimer = 0; }
+    }, 30);
+  };
+
+  const download = (name, blobOrText, type) => {
+    const blob = blobOrText instanceof Blob ? blobOrText : new Blob([blobOrText], { type });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  $('exportsvg').onclick = () => {
+    const s = panel?.exportSVG(0);
+    if (s) download('diagram.svg', s, 'image/svg+xml');
+  };
+  $('exportpng').onclick = async () => {
+    try { download('diagram.png', await panel.exportPNG(0)); }
+    catch (e) { $('log').textContent = String(e); }
+  };
+  $('copyascii').onclick = () => {
+    const ascii = panel?.toAscii(0);
+    if (!ascii) { $('log').textContent = 'ASCII export: needs a graph/tree diagram (not 3d/iso)'; return; }
+    navigator.clipboard?.writeText(ascii);
+    $('log').textContent = 'copied ASCII art to clipboard:\n' + ascii.split('\n').slice(0, 3).join('\n') + ' …';
+  };
+
+  renderAll();
+</script>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VizEngine — composer</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; background: #ececec; color: #1a1a1a; }
+  header { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px dashed #999; background: #fff; flex-wrap: wrap; }
+  header b { margin-right: auto; }
+  a.btn, button, select { font: inherit; background: #fff; border: 1px solid #1a1a1a; padding: 4px 10px; cursor: pointer; box-shadow: 2px 2px 0 rgba(0,0,0,.12); text-decoration: none; color: inherit; border-radius: 3px; }
+  main { flex: 1; display: grid; grid-template-columns: 210px 1fr 330px; min-height: 0; }
+  #palette, #props { overflow: auto; background: #fff; }
+  #palette { border-right: 1px dashed #999; padding: 8px; }
+  #props { border-left: 1px dashed #999; padding: 10px; }
+  #palette h4 { margin: 12px 4px 4px; font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .06em; }
+  .pchip { padding: 5px 8px; margin: 3px 0; border: 1px solid #1a1a1a; border-radius: 4px; cursor: grab; background: #fbfbfb; font-size: 12px; user-select: none; }
+  .pchip:active { cursor: grabbing; }
+  #doc { overflow: auto; padding: 14px; }
+  #doc.drop { background: #eef4ff; }
+  .block { border: 1px solid #ccc; border-radius: 4px; margin: 8px 0; background: #fff; }
+  .block.sel { border-color: #1e6fff; box-shadow: 0 0 0 2px rgba(30,111,255,.2); }
+  .block > .bhead { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px dashed #ddd; font-size: 11px; color: #666; cursor: pointer; }
+  .block > .bhead b { color: #1a1a1a; margin-right: auto; }
+  .block > .bhead button { padding: 1px 7px; font-size: 12px; box-shadow: none; }
+  .block > .body { padding: 4px; }
+  #empty { color: #888; padding: 30px; text-align: center; border: 2px dashed #ccc; border-radius: 6px; margin: 20px; }
+  .field { margin: 8px 0; }
+  .field label { display: block; color: #666; font-size: 11px; margin-bottom: 2px; }
+  .field input, .field textarea, .field select { width: 100%; font: inherit; font-size: 12px; padding: 4px 6px; border: 1px solid #bbb; border-radius: 3px; }
+  .field textarea { resize: vertical; min-height: 60px; }
+  #srcbox { width: 100%; height: 150px; font: inherit; font-size: 11px; margin-top: 10px; border: 1px solid #bbb; border-radius: 3px; padding: 6px; resize: vertical; }
+  #errors { color: #b00020; }
+  h5 { margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: .05em; }
+</style>
+</head>
+<body>
+<header>
+  <b>VizEngine composer <span id="ver"></span></b>
+  <span id="errors"></span>
+  <label>theme <select id="theme"></select></label>
+  <button id="copy">copy source</button>
+  <a class="btn" href="./editor.html">graph editor →</a>
+  <a class="btn" href="./examples.html">examples →</a>
+</header>
+<main>
+  <div id="palette"></div>
+  <div id="doc"><div id="empty">Drag a component here to start building your document →</div></div>
+  <div id="props"><h5>Properties</h5><div id="fields" style="color:#888">Select a block to edit its properties.</div></div>
+</main>
+<script src="../dist/vizengine.js"></script>
+<script>
+  window.onerror = (m) => { document.getElementById('errors').textContent = 'ERROR: ' + m; };
+  const $ = (id) => document.getElementById(id);
+  $('ver').textContent = 'v' + VizEngine.version;
+  for (const t of VizEngine.themes) { const o = document.createElement('option'); o.value = o.textContent = t; $('theme').appendChild(o); }
+
+  const CAT = VizEngine.catalog;
+  const byId = (id) => CAT.find((c) => c.id === id);
+  let theme = 'sketch';
+  let blocks = []; // {uid, id, props, panel}
+  let selected = null;
+  let seq = 0;
+
+  // ---- palette (all components, grouped) ----
+  const palette = $('palette');
+  const cats = [...new Set(CAT.map((c) => c.category))];
+  for (const cat of cats) {
+    const h = document.createElement('h4'); h.textContent = cat; palette.appendChild(h);
+    for (const c of CAT.filter((x) => x.category === cat)) {
+      const chip = document.createElement('div');
+      chip.className = 'pchip'; chip.textContent = c.name; chip.draggable = true;
+      chip.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', c.id));
+      palette.appendChild(chip);
+    }
+  }
+
+  // ---- document canvas ----
+  const doc = $('doc');
+  doc.addEventListener('dragover', (e) => { e.preventDefault(); doc.classList.add('drop'); });
+  doc.addEventListener('dragleave', () => doc.classList.remove('drop'));
+  doc.addEventListener('drop', (e) => {
+    e.preventDefault(); doc.classList.remove('drop');
+    const id = e.dataTransfer.getData('text/plain'); if (!byId(id)) return;
+    const card = e.target.closest?.('.block');
+    const idx = card ? blocks.findIndex((b) => b.uid === card.dataset.uid) : blocks.length;
+    addBlock(id, idx < 0 ? blocks.length : idx);
+  });
+
+  function addBlock(id, index) {
+    const comp = byId(id);
+    const props = JSON.parse(JSON.stringify(comp.default || {}));
+    const block = { uid: 'b' + ++seq, id, props, panel: null };
+    blocks.splice(index ?? blocks.length, 0, block);
+    render();
+    select(block.uid);
+    updateSource();
+  }
+
+  function move(uid, dir) {
+    const i = blocks.findIndex((b) => b.uid === uid); const j = i + dir;
+    if (j < 0 || j >= blocks.length) return;
+    [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
+    render(); updateSource();
+  }
+  function remove(uid) {
+    blocks = blocks.filter((b) => b.uid !== uid);
+    if (selected === uid) { selected = null; renderProps(); }
+    render(); updateSource();
+  }
+
+  function render() {
+    $('empty').style.display = blocks.length ? 'none' : 'block';
+    // remove old cards (keep #empty)
+    [...doc.querySelectorAll('.block')].forEach((el) => el.remove());
+    for (const b of blocks) {
+      const comp = byId(b.id);
+      const card = document.createElement('div');
+      card.className = 'block' + (selected === b.uid ? ' sel' : '');
+      card.dataset.uid = b.uid;
+      const head = document.createElement('div'); head.className = 'bhead';
+      const name = document.createElement('b'); name.textContent = comp.name;
+      const up = mkBtn('↑', () => move(b.uid, -1));
+      const dn = mkBtn('↓', () => move(b.uid, 1));
+      const del = mkBtn('✕', () => remove(b.uid));
+      head.append(name, up, dn, del);
+      head.addEventListener('click', (e) => { if (e.target.tagName !== 'BUTTON') select(b.uid); });
+      const body = document.createElement('div'); body.className = 'body';
+      card.append(head, body);
+      doc.appendChild(card);
+      b.panel = new VizEngine.Panel(body, { theme });
+      try { b.panel.render(comp.build(b.props)); } catch (e) { body.textContent = String(e); }
+    }
+  }
+  function mkBtn(t, fn) { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; }
+
+  function select(uid) { selected = uid; render(); renderProps(); }
+
+  function rerenderBlock(uid) {
+    const b = blocks.find((x) => x.uid === uid); if (!b || !b.panel) return;
+    try { b.panel.render(byId(b.id).build(b.props)); } catch (e) {}
+    updateSource();
+  }
+
+  function renderProps() {
+    const host = $('fields'); host.innerHTML = '';
+    const b = blocks.find((x) => x.uid === selected);
+    if (!b) { host.style.color = '#888'; host.textContent = 'Select a block to edit its properties.'; return; }
+    host.style.color = '';
+    const comp = byId(b.id);
+    for (const f of comp.fields) {
+      const wrap = document.createElement('div'); wrap.className = 'field';
+      const lab = document.createElement('label'); lab.textContent = f.label; wrap.appendChild(lab);
+      let input;
+      if (f.type === 'select') {
+        input = document.createElement('select');
+        for (const opt of f.options) input.appendChild(new Option(opt, opt));
+      } else if (f.type === 'textarea' || f.type === 'lines') {
+        input = document.createElement('textarea');
+      } else {
+        input = document.createElement('input'); input.type = 'text';
+      }
+      input.value = b.props[f.key] ?? '';
+      input.addEventListener('input', () => { b.props[f.key] = input.value; rerenderBlock(b.uid); });
+      wrap.appendChild(input); host.appendChild(wrap);
+    }
+  }
+
+  function fullSource() { return blocks.map((b) => byId(b.id).build(b.props)).join('\n\n'); }
+  function updateSource() { $('srcbox').value = fullSource(); }
+
+  // source box under properties
+  const srcHead = document.createElement('h5'); srcHead.textContent = 'Generated source';
+  const srcBox = document.createElement('textarea'); srcBox.id = 'srcbox'; srcBox.spellcheck = false; srcBox.readOnly = true;
+  $('props').append(srcHead, srcBox);
+
+  $('theme').onchange = () => { theme = $('theme').value; blocks.forEach((b) => { b.panel?.setTheme(theme); try { b.panel?.render(byId(b.id).build(b.props)); } catch (e) {} }); };
+  $('copy').onclick = () => { navigator.clipboard?.writeText(fullSource()); $('copy').textContent = 'copied'; setTimeout(() => ($('copy').textContent = 'copy source'), 1000); };
+
+  // theme from URL if given
+  const qt = new URLSearchParams(location.search).get('theme');
+  if (VizEngine.themes.includes(qt)) { theme = qt; $('theme').value = qt; }
+
+  // seed with a couple blocks so it isn't empty
+  addBlock('banner');
+  addBlock('verdict');
+  addBlock('graph');
+  if (blocks[1]) select(blocks[1].uid);
+</script>
+</body>
+</html>
